@@ -3,4 +3,5 @@ Flask-SocketIO
 Flask-SQLAlchemy
 python-dotenv
 gunicorn==23.0.0
-eventlet==80.9.0
+eventlet==0.36.1
+setuptools==80.9.0
