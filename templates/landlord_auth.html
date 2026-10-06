@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block title %}{{ 'Create account' if mode == 'register' else 'Log in' }} — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block content %}
+  <div class="room-detail" style="max-width:420px;">
+    <h2>{{ 'Create a landlord account' if mode == 'register' else 'Landlord login' }}</h2>
+    <p class="muted" style="font-size:13.5px;margin-bottom:16px;">
+      {% if mode == 'register' %}
+        Needed to list rooms, respond to nearby requests, and manage your dashboard.
+      {% else %}
+        New here? <a href="{{ url_for('landlord_register', next=request.args.get('next')) }}">Create an account</a> instead.
+      {% endif %}
+    </p>
+
+    {% if errors %}
+      <div class="errors">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    {% if mode == 'register' %}
+      <form class="application" method="post" action="{{ url_for('landlord_register', next=request.args.get('next')) }}" style="border-top:none;padding-top:0;">
+        <label>Your name
+          <input required name="name" value="{{ form.name if form else '' }}">
+        </label>
+        <label>Email
+          <input required type="email" name="email" value="{{ form.email if form else '' }}">
+        </label>
+        <label>Password
+          <input required type="password" name="password" minlength="6">
+        </label>
+        <label>Confirm password
+          <input required type="password" name="confirm" minlength="6">
+        </label>
+        <button type="submit">Create account</button>
+      </form>
+    {% else %}
+      <form class="application" method="post" action="{{ url_for('landlord_login', next=request.args.get('next')) }}" style="border-top:none;padding-top:0;">
+        <label>Email
+          <input required type="email" name="email" value="{{ form.email if form else '' }}">
+        </label>
+        <label>Password
+          <input required type="password" name="password">
+        </label>
+        <button type="submit">Log in</button>
+      </form>
+      <p class="muted" style="font-size:12.5px;margin-top:14px;">
+        Demo account: demo@tanstarsafehousing.co.zw / demo1234 — already owns the seeded listings.
+      </p>
+    {% endif %}
+  </div>
+{% endblock %}

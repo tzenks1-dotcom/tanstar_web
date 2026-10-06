@@ -1,0 +1,7 @@
+{% extends "layout.html" %}
+{% block title %}Not found — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block content %}
+  <h2>That {{ kind }} doesn't exist</h2>
+  <p class="muted">It may have been removed. <a href="{{ url_for('browse') }}">Back to browsing</a>.</p>
+{% endblock %}

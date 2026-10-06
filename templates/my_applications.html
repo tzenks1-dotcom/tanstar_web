@@ -1,0 +1,114 @@
+{% extends "layout.html" %}
+{% block title %}My activity — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block content %}
+  <h2>My activity</h2>
+  <p class="note-box">Look up your requests and applications by the email you used.</p>
+
+  {% if just_sent %}
+    <div class="flash">Application sent — you can track its status below.</div>
+  {% endif %}
+  {% if just_requested %}
+    <div class="flash">Request sent — nearby landlords can see it now. Offers will appear below as they come in.</div>
+  {% endif %}
+  {% if just_matched %}
+    <div class="flash">Matched! Your room is confirmed — get directions from the applications list below.</div>
+  {% endif %}
+
+  <form class="lookup-form" method="get" action="{{ url_for('my_applications') }}">
+    <input type="email" name="email" placeholder="you@example.com" value="{{ email }}" required>
+    <button type="submit">Look up</button>
+  </form>
+
+  {% if email %}
+    <h3 style="font-size:18px;">Your requests</h3>
+    {% if not requests %}
+      <p class="muted">No requests yet — <a href="{{ url_for('request_a_room') }}">request a room</a> and landlords nearby can offer you one.</p>
+    {% endif %}
+    {% for rq in requests %}
+      <div class="app-row" style="flex-direction:column;align-items:stretch;" data-request-id="{{ rq.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="title">{{ rq.area_label or rq.type }} · {{ rq.type }}</div>
+            <div class="sub">Your budget ${{ rq.budget }}/mo · move-in {{ rq.move_in }}</div>
+          </div>
+          <span class="status-pill status-{{ 'Approved' if rq.status == 'Matched' else 'Submitted' }}">{{ rq.status }}</span>
+        </div>
+        <div class="offers-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+          {% for o in rq.offers %}
+            <div class="app-row" style="margin-bottom:0;background:var(--bg);">
+              <div>
+                <div class="title" style="font-size:14.5px;">{{ o.room_title }} <span class="muted" style="font-weight:400;">· {{ o.room_city }}</span></div>
+                <div class="sub">{{ o.landlord_name }} · {{ o.distance_km }} km from your pin{% if o.room_verified %} · <span style="color:var(--brass-dark);">✓ verified</span>{% endif %}</div>
+                {% if o.message %}<div class="note">"{{ o.message }}"</div>{% endif %}
+              </div>
+              <div class="actions">
+                <span class="price" style="font-family:'Zilla Slab',serif;font-weight:700;font-size:17px;">${{ o.price }}</span>
+                {% if o.status == 'Pending' and rq.status == 'Open' %}
+                  <form method="post" action="{{ url_for('accept_offer', offer_id=o.id) }}">
+                    <button type="submit" class="btn-outline sage">Accept</button>
+                  </form>
+                {% else %}
+                  <span class="status-pill status-{{ o.status }}">{{ o.status }}</span>
+                {% endif %}
+              </div>
+            </div>
+          {% else %}
+            <p class="muted" style="font-size:13.5px;margin:0;">No offers yet — checking automatically…</p>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <h3 style="font-size:18px;margin-top:26px;">Your applications</h3>
+    {% if not applications %}
+      <p class="muted">No direct applications yet.</p>
+    {% endif %}
+    {% for a in applications %}
+      <div class="app-row">
+        <div>
+          <div class="title">{{ a.room_title }}</div>
+          <div class="sub">{{ a.room_address }}, {{ a.room_city }} · move-in {{ a.move_in }} · sent {{ a.submitted_at }}</div>
+        </div>
+        <div class="actions">
+          <span class="status-pill status-{{ a.status.replace(' ', '-') }}">{{ a.status }}</span>
+          <a class="btn-outline brass" href="{{ url_for('directions', app_id=a.id) }}">Get directions</a>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <script>
+    // Real-time: join each open request's own channel so a landlord's offer —
+    // or another landlord's offer being accepted — lands immediately, the same
+    // way a rider sees a driver's quote appear live instead of refreshing.
+    const emailVal = {{ email|tojson }};
+    if (emailVal) {
+      const requestEls = document.querySelectorAll('[data-request-id]');
+      const socket = io();
+      socket.on('connect', () => {
+        requestEls.forEach(el => {
+          socket.emit('join_request', { request_id: el.getAttribute('data-request-id') });
+        });
+      });
+      socket.on('new_offer', () => location.reload());
+      socket.on('request_matched', () => location.reload());
+
+      // Slow fallback poll in case the socket connection drops.
+      requestEls.forEach(el => {
+        const reqId = el.getAttribute('data-request-id');
+        setInterval(() => {
+          fetch(`/api/requests/${reqId}/offers`).then(r => r.json()).then(data => {
+            const list = el.querySelector('.offers-list');
+            if (!list) return;
+            const placeholder = list.querySelector('p');
+            if (data.offers && data.offers.length > 0 &&
+                (list.children.length < data.offers.length || placeholder)) {
+              location.reload();
+            }
+          }).catch(() => {});
+        }, 30000);
+      });
+    }
+  </script>
+{% endblock %}

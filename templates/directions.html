@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{% block title %}Directions — TanstarSafeHousing{% endblock %}
+{% block mainclass %}map-wrap{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+  <div class="directions-screen">
+    <div id="dir-status">Finding your location…</div>
+    <div id="dir-map"></div>
+    <div class="directions-panel">
+      <div>
+        <div class="stat" id="dist-stat">—<small>distance</small></div>
+      </div>
+      <div>
+        <div class="stat" id="time-stat">—<small>est. drive time</small></div>
+      </div>
+      <div class="dest">
+        <strong>{{ app.room_title }}</strong><br>
+        {{ app.room_address }}, {{ app.room_city }}
+      </div>
+      <a class="btn-outline brass" id="gmaps-link"
+         href="https://www.google.com/maps/dir/?api=1&destination={{ app.room_lat }},{{ app.room_lng }}"
+         target="_blank" rel="noopener">Open in Google Maps</a>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const destLat = {{ app.room_lat }}, destLng = {{ app.room_lng }};
+    const dirMap = L.map('dir-map').setView([destLat, destLng], 12);
+    const dirTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(dirMap);
+
+    const destIcon = L.divIcon({ className: '', html: '<div class="pin-price verified">Room</div>', iconAnchor: [24, 14] });
+    L.marker([destLat, destLng], { icon: destIcon }).addTo(dirMap);
+
+    const statusEl = document.getElementById('dir-status');
+
+    // Offline-friendly: the map itself may fail to draw, but the address and
+    // the Google Maps link below don't depend on these tiles loading.
+    let tileErrorCount = 0;
+    dirTiles.on('tileerror', () => {
+      tileErrorCount++;
+      if (tileErrorCount >= 6) {
+        statusEl.textContent = "Map tiles couldn't load — check your connection. The address "
+          + "and Open in Google Maps button below still work.";
+      }
+    });
+
+    function showRoute(originLat, originLng) {
+      const originIcon = L.divIcon({ className: '', html: '<div class="pin-price">You</div>', iconAnchor: [24, 14] });
+      L.marker([originLat, originLng], { icon: originIcon }).addTo(dirMap);
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+      fetch(url).then(r => r.json()).then(data => {
+        if (data.routes && data.routes.length) {
+          const route = data.routes[0];
+          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+          L.polyline(coords, { color: '#B8863F', weight: 5, opacity: 0.85 }).addTo(dirMap);
+          dirMap.fitBounds(coords, { padding: [40, 40] });
+
+          const km = (route.distance / 1000).toFixed(1);
+          const mins = Math.round(route.duration / 60);
+          document.getElementById('dist-stat').innerHTML = km + ' km<small>distance</small>';
+          document.getElementById('time-stat').innerHTML = mins + ' min<small>est. drive time</small>';
+          statusEl.textContent = 'Route found — drag the map to explore.';
+        } else {
+          throw new Error('no route');
+        }
+      }).catch(() => {
+        dirMap.fitBounds([[originLat, originLng], [destLat, destLng]], { padding: [40, 40] });
+        statusEl.textContent = "Couldn't load a driving route right now — use Open in Google Maps below for turn-by-turn.";
+      });
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => showRoute(pos.coords.latitude, pos.coords.longitude),
+        () => { statusEl.textContent = "Couldn't get your location — use Open in Google Maps below instead."; }
+      );
+    } else {
+      statusEl.textContent = "Location isn't available in this browser — use Open in Google Maps below instead.";
+    }
+  </script>
+{% endblock %}

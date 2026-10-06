@@ -1,0 +1,124 @@
+{% extends "layout.html" %}
+{% block title %}Nearby requests — TanstarSafeHousing{% endblock %}
+{% block mainclass %}map-wrap{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+  <div class="map-screen">
+    <div class="map-listpanel" id="list-panel">
+      <p class="muted" style="margin-bottom:14px;">Open requests from renters — offer one of your
+        listings at their budget, or counter with your own price. New requests appear here
+        automatically.</p>
+      {% if request.args.get('sent') == '1' %}
+        <div class="flash">Offer sent — the renter will see it next time they check their requests.</div>
+      {% endif %}
+      <p class="muted" id="list-empty" style="display:none;">No open requests right now — check back soon.</p>
+      <div id="card-list"></div>
+    </div>
+    <div style="flex:1 1 auto; position:relative;">
+      <div class="tile-error-banner" id="tile-error-banner" style="margin-top:14px;">
+        Map tiles are struggling to load — check your connection. The list still works below.
+      </div>
+      <div id="map"></div>
+      <button type="button" class="map-toggle-btn" id="map-toggle-btn">View list</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', { zoomControl: true }).setView([-19.4500, 29.8167], 13); // centered on Gweru
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let tileErrorCount = 0;
+    tiles.on('tileerror', () => {
+      tileErrorCount++;
+      if (tileErrorCount >= 6) {
+        document.getElementById('tile-error-banner').style.display = 'block';
+        if (window.innerWidth <= 860) showList();
+      }
+    });
+
+    const listPanel = document.getElementById('list-panel');
+    const toggleBtn = document.getElementById('map-toggle-btn');
+    function showList() { listPanel.classList.add('force-show'); toggleBtn.textContent = 'View map'; }
+    function showMap() { listPanel.classList.remove('force-show'); toggleBtn.textContent = 'View list'; }
+    toggleBtn.addEventListener('click', () => {
+      listPanel.classList.contains('force-show') ? showMap() : showList();
+    });
+
+    let markers = {};
+    let cardEls = {};
+    let knownIds = new Set();
+
+    function budgetIcon(req) {
+      return L.divIcon({
+        className: '', iconAnchor: [24, 14],
+        html: `<div class="pin-price">$${req.budget} ask</div>`,
+      });
+    }
+
+    function focusReq(id) {
+      const m = markers[id];
+      if (m) { map.setView(m.getLatLng(), 12); m.openPopup(); }
+      Object.values(cardEls).forEach(el => el.classList.remove('active'));
+      if (cardEls[id]) cardEls[id].classList.add('active');
+    }
+
+    function renderCards(reqs) {
+      const list = document.getElementById('card-list');
+      const empty = document.getElementById('list-empty');
+      list.innerHTML = '';
+      cardEls = {};
+      if (reqs.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      reqs.forEach(r => {
+        const a = document.createElement('a');
+        a.href = `/nearby-requests/${r.id}/offer`;
+        a.className = 'map-card';
+        a.innerHTML = `
+          <div class="row1"><span>${r.area_label || r.type}</span><span>${r.type}</span></div>
+          <div class="title">${r.renter_name}</div>
+          <div><span class="price">$${r.budget}</span> <span class="muted" style="font-size:12.5px;">/ mo · wants ${r.move_in}</span></div>
+          ${r.note ? `<div class="muted" style="font-size:12.5px;margin-top:4px;">"${r.note}"</div>` : ''}
+        `;
+        a.addEventListener('mouseenter', () => focusReq(r.id));
+        list.appendChild(a);
+        cardEls[r.id] = a;
+      });
+    }
+
+    function loadRequests() {
+      fetch('/api/requests')
+        .then(res => res.json())
+        .then(reqs => {
+          Object.values(markers).forEach(m => map.removeLayer(m));
+          markers = {};
+          reqs.forEach(r => {
+            const marker = L.marker([r.lat, r.lng], { icon: budgetIcon(r) }).addTo(map);
+            marker.bindPopup(`
+              <div class="popup-title">${r.renter_name}</div>
+              <div class="popup-sub">${r.area_label || ''} · ${r.type} · budget $${r.budget}/mo</div>
+              <a class="popup-link" href="/nearby-requests/${r.id}/offer">Make an offer</a>
+            `);
+            markers[r.id] = marker;
+          });
+          renderCards(reqs);
+          knownIds = new Set(reqs.map(r => r.id));
+        });
+    }
+
+    loadRequests();
+    setInterval(loadRequests, 30000); // slow fallback poll in case the socket drops
+
+    // Real-time: a brand-new request (or one just getting matched by someone
+    // else) pushes straight to every landlord watching this map, the same way
+    // a new ride request appears instantly on a driver's screen.
+    const socket = io();
+    socket.on('connect', () => socket.emit('join_landlords'));
+    socket.on('new_request', () => loadRequests());
+    socket.on('request_matched', () => loadRequests());
+  </script>
+{% endblock %}

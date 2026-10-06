@@ -1,0 +1,144 @@
+{% extends "layout.html" %}
+{% block title %}Browse rooms — TanstarSafeHousing{% endblock %}
+{% block mainclass %}map-wrap{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+  <div class="map-screen">
+    <div class="map-listpanel" id="list-panel">
+      <p class="muted" id="list-empty" style="display:none;">No rooms match those filters yet.</p>
+      <div id="card-list"></div>
+    </div>
+    <div style="flex:1 1 auto; position:relative;">
+      <div class="map-topbar">
+        <input type="text" id="f-q" placeholder="Search a city, suburb, or keyword">
+        <select id="f-type">
+          <option value="">All types</option>
+          {% for t in room_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+        <input type="number" id="f-price" placeholder="Max price">
+      </div>
+      <div class="tile-error-banner" id="tile-error-banner">
+        Map tiles are struggling to load — check your connection. The list still works below.
+      </div>
+      <div id="map"></div>
+      <button type="button" class="map-toggle-btn" id="map-toggle-btn">View list</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', { zoomControl: true }).setView([-19.4500, 29.8167], 13); // centered on Gweru
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Offline-friendly: if tiles keep failing, nudge mobile users toward the
+    // list view, which only needs the lightweight /api/rooms JSON to work.
+    let tileErrorCount = 0;
+    tiles.on('tileerror', () => {
+      tileErrorCount++;
+      if (tileErrorCount >= 6) {
+        document.getElementById('tile-error-banner').style.display = 'block';
+        if (window.innerWidth <= 860) showList();
+      }
+    });
+
+    const listPanel = document.getElementById('list-panel');
+    const toggleBtn = document.getElementById('map-toggle-btn');
+    function showList() {
+      listPanel.classList.add('force-show');
+      toggleBtn.textContent = 'View map';
+    }
+    function showMap() {
+      listPanel.classList.remove('force-show');
+      toggleBtn.textContent = 'View list';
+    }
+    toggleBtn.addEventListener('click', () => {
+      listPanel.classList.contains('force-show') ? showMap() : showList();
+    });
+
+    let markers = {};
+    let cardEls = {};
+
+    function pinIcon(room) {
+      return L.divIcon({
+        className: '',
+        html: `<div class="pin-price${room.verified ? ' verified' : ''}">US$${room.price}</div>`,
+        iconSize: null,
+        iconAnchor: [24, 14],
+      });
+    }
+
+    function focusRoom(id) {
+      const m = markers[id];
+      if (m) { map.setView(m.getLatLng(), 12); m.openPopup(); }
+      Object.values(cardEls).forEach(el => el.classList.remove('active'));
+      if (cardEls[id]) cardEls[id].classList.add('active');
+    }
+
+    function renderCards(rooms) {
+      const list = document.getElementById('card-list');
+      const empty = document.getElementById('list-empty');
+      list.innerHTML = '';
+      cardEls = {};
+      if (rooms.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      rooms.forEach(r => {
+        const a = document.createElement('a');
+        a.href = `/room/${r.id}`;
+        a.className = 'map-card';
+        a.innerHTML = `
+          <div class="row1"><span>${r.city} · ${r.type}</span>${r.verified ? '<span class="verified">✓ Verified</span>' : ''}</div>
+          <div class="title">${r.title}</div>
+          <div><span class="price">US$${r.price}</span> <span class="muted" style="font-size:12.5px;">/ mo · ${r.size_sqft} sqft</span></div>
+        `;
+        a.addEventListener('mouseenter', () => focusRoom(r.id));
+        list.appendChild(a);
+        cardEls[r.id] = a;
+      });
+    }
+
+    function loadRooms() {
+      const params = new URLSearchParams();
+      const q = document.getElementById('f-q').value.trim();
+      const type = document.getElementById('f-type').value;
+      const price = document.getElementById('f-price').value;
+      if (q) params.set('q', q);
+      if (type) params.set('type', type);
+      if (price) params.set('max_price', price);
+
+      fetch('/api/rooms?' + params.toString())
+        .then(res => res.json())
+        .then(rooms => {
+          Object.values(markers).forEach(m => map.removeLayer(m));
+          markers = {};
+          rooms.forEach(r => {
+            const marker = L.marker([r.lat, r.lng], { icon: pinIcon(r) }).addTo(map);
+            marker.bindPopup(`
+              <div class="popup-title">${r.title}</div>
+              <div class="popup-sub">${r.city} · ${r.type} · US$${r.price}/mo</div>
+              <a class="popup-link" href="/room/${r.id}">View & apply</a>
+            `);
+            markers[r.id] = marker;
+          });
+          renderCards(rooms);
+        });
+    }
+
+    ['input', 'change'].forEach(evt => {
+      document.getElementById('f-q').addEventListener(evt, debounce(loadRooms, 300));
+      document.getElementById('f-type').addEventListener(evt, loadRooms);
+      document.getElementById('f-price').addEventListener(evt, debounce(loadRooms, 300));
+    });
+
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    }
+
+    loadRooms();
+  </script>
+{% endblock %}

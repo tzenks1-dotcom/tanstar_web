@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+{% from "_badges.html" import safety_badge %}
+{% block title %}{{ room.title }} — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+  {% if just_posted %}
+    <div class="flash" style="max-width:640px;">Your listing is live — it'll show up on the map for renters browsing Gweru.</div>
+  {% endif %}
+  <div class="room-detail">
+    <div class="meta">{{ room.city }} · {{ room.type }}{% if room.verified %} · <span style="color:var(--brass-dark);">✓ Verified</span>{% endif %}</div>
+    <h2>{{ room.title }}</h2>
+
+    {% if room.photo_url %}
+      <img class="photo" src="{{ room.photo_url }}" alt="{{ room.title }}">
+    {% else %}
+      <div class="photo-placeholder">{{ room.title[0] }}</div>
+    {% endif %}
+
+    <div class="price">US${{ room.price }} <small>/ month · {{ room.size_sqft }} sqft</small></div>
+    {% if room.landlord_name %}<div class="landlord">Listed by {{ room.landlord_name }}</div>{% endif %}
+    <div class="landlord">{{ room.address }}, {{ room.city }}</div>
+    <p class="desc">{{ room.description }}</p>
+    <div class="badges">
+      {% for s in room.safety %}{{ safety_badge(s) }}{% endfor %}
+    </div>
+
+    <div id="mini-map" class="mini-map"></div>
+    <div id="mini-map-fallback" class="map-fallback" style="display:none;margin-bottom:16px;">
+      Map tiles couldn't load — the address above is still accurate.
+    </div>
+
+    {% if errors %}
+      <div class="errors">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form class="application" method="post" action="{{ url_for('apply_to_room', room_id=room.id) }}">
+      <h3 style="font-size:17px;">Apply to rent this room</h3>
+      <label>Full name
+        <input required name="name" value="{{ (form.name if form else profile.get('name','')) }}">
+      </label>
+      <label>Email
+        <input required type="email" name="email" value="{{ (form.email if form else profile.get('email','')) }}">
+      </label>
+      <label>Phone (optional)
+        <input name="phone" value="{{ (form.phone if form else profile.get('phone','')) }}">
+      </label>
+      <label>Preferred move-in date
+        <input required type="date" name="move_in" value="{{ form.move_in if form else '' }}">
+      </label>
+      <label>Note to the landlord (optional)
+        <textarea rows="3" name="message">{{ form.message if form else '' }}</textarea>
+      </label>
+      <button type="submit">Send application</button>
+    </form>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const lat = {{ room.lat }}, lng = {{ room.lng }};
+    const miniMap = L.map('mini-map', { zoomControl: false, dragging: false, scrollWheelZoom: false })
+      .setView([lat, lng], 13);
+    const miniTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(miniMap);
+    L.marker([lat, lng]).addTo(miniMap);
+
+    let miniTileErrors = 0;
+    miniTiles.on('tileerror', () => {
+      miniTileErrors++;
+      if (miniTileErrors >= 6) {
+        document.getElementById('mini-map').style.display = 'none';
+        document.getElementById('mini-map-fallback').style.display = 'flex';
+      }
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block title %}Landlord dashboard — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block content %}
+  <h2>Landlord dashboard</h2>
+  <p class="note-box">Logged in as {{ landlord.name }}. This shows only your own listings and the
+    applications they've received — "Mark verified" is a self-service demo toggle here; in a real
+    deployment, verification would need an independent reviewer to check documents first, not the
+    listing owner themselves.</p>
+
+  {% if not grouped %}
+    <p class="muted">You haven't listed any rooms yet — <a href="{{ url_for('list_a_room') }}">list a room</a> to see it here.</p>
+  {% endif %}
+
+  {% for g in grouped %}
+    <div class="dash-group">
+      <div class="dash-head">
+        <h3>{{ g.room_title }} <span>· {{ g.room_city }}</span></h3>
+        {% if g.verified %}
+          <span class="badge">✓ Verified</span>
+        {% else %}
+          <span class="status-pill status-Submitted">Unverified</span>
+        {% endif %}
+        <form method="post" action="{{ url_for('toggle_verified', room_id=g.room_id) }}">
+          <button type="submit" class="btn-outline sage">{{ 'Unmark verified' if g.verified else 'Mark verified' }}</button>
+        </form>
+      </div>
+      {% if not g.apps %}
+        <p class="muted" style="font-size:13.5px;">No applications for this listing yet.</p>
+      {% endif %}
+      {% for a in g.apps %}
+        <div class="app-row">
+          <div>
+            <div class="title" style="font-size:14.5px;">{{ a.applicant_name }}</div>
+            <div class="sub">{{ a.email }}{% if a.phone %} · {{ a.phone }}{% endif %} · move-in {{ a.move_in }}</div>
+            {% if a.message %}<div class="note">"{{ a.message }}"</div>{% endif %}
+          </div>
+          <div class="status-form">
+            <span class="status-pill status-{{ a.status.replace(' ', '-') }}">{{ a.status }}</span>
+            <form method="post" action="{{ url_for('update_status', app_id=a.id) }}" class="status-form">
+              <select name="status">
+                {% for s in statuses %}
+                  <option value="{{ s }}" {{ 'selected' if s == a.status else '' }}>{{ s }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit">Update</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endblock %}

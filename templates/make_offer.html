@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}Make an offer — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block content %}
+  <h1 style="font-size:24px;">Offer a room to {{ req.renter_name }}</h1>
+  <div class="room-detail" style="margin-bottom:20px;">
+    <div class="meta">{{ req.area_label or req.type }} · wants a {{ req.type.lower() }} · move-in {{ req.move_in }}</div>
+    <div class="price">${{ req.budget }} <small>/ month — their asking budget</small></div>
+    {% if req.note %}<p class="desc">"{{ req.note }}"</p>{% endif %}
+  </div>
+
+  {% if errors %}
+    <div class="errors" style="max-width:640px;">
+      {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not rooms %}
+    <p class="muted" style="max-width:640px;">You don't have any listings yet, so there's nothing
+      to offer this renter. <a href="{{ url_for('list_a_room') }}">List a room</a> first, then come
+      back here.</p>
+  {% else %}
+    <form class="application" method="post" action="{{ url_for('make_offer', request_id=req.id) }}" style="max-width:640px;border-top:none;padding-top:0;">
+      <label>Which of your listings is this offer for?
+        <select required name="room_id">
+          <option value="">Choose a listing</option>
+          {% for r in rooms %}
+            <option value="{{ r.id }}" {{ 'selected' if form and form.room_id == r.id else '' }}>
+              {{ r.title }} — {{ r.city }} (${{ r.price }}/mo, {{ r.distance_km }} km from their pin)
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <p class="muted" style="font-size:12.5px;margin:-4px 0 4px;">Offering as {{ current_landlord.name }}.</p>
+      <label>Your price ($/month) — match their budget or counter-offer
+        <input required type="number" min="1" name="price" value="{{ form.price if form else req.budget }}">
+      </label>
+      <label>Message to the renter (optional)
+        <textarea rows="3" name="message" placeholder="e.g. Happy to match your budget, available from the 15th">{{ form.message if form else '' }}</textarea>
+      </label>
+      <button type="submit">Send offer</button>
+    </form>
+  {% endif %}
+{% endblock %}

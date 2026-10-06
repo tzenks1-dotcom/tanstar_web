@@ -1,0 +1,172 @@
+{% extends "layout.html" %}
+{% block title %}Request a room — TanstarSafeHousing{% endblock %}
+{% block mainclass %}content-pad{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+  <h1 style="font-size:26px;">Name your price, we'll find you a room</h1>
+  <p class="note-box">Drop a pin where you want to live and say what you can afford. Landlords
+    nearby see your request on their map and offer you a room, either at your price or with a
+    counter-offer — like hailing a ride, but for housing.</p>
+
+  {% if errors %}
+    <div class="errors" style="max-width:820px;">
+      {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('request_a_room') }}" class="post-layout">
+    <div>
+      <div class="address-search">
+        <input type="text" id="addr-search" placeholder="Search a suburb or area">
+        <button type="button" id="addr-search-btn">Search</button>
+      </div>
+      <div id="post-map" class="pin-map"></div>
+      <div id="post-map-fallback" class="map-fallback" style="display:none;">
+        Map tiles couldn't load (likely no internet right now). Enter the location by hand below instead.
+      </div>
+      <div class="pin-hint">Click the map to move the pin, or <button type="button" id="locate-btn" class="locate-btn" style="padding:2px 8px;">use my current location</button>.</div>
+      <button type="button" id="manual-coords-toggle" class="link-btn" style="margin-top:6px;">Enter coordinates manually instead</button>
+      <div class="two-col" id="manual-coords" style="display:none;margin-top:8px;">
+        <label>Latitude
+          <input type="number" step="any" id="m-lat" placeholder="-19.4500">
+        </label>
+        <label>Longitude
+          <input type="number" step="any" id="m-lng" placeholder="29.8167">
+        </label>
+      </div>
+      <input type="hidden" name="lat" id="f-lat" value="{{ form.lat if form else '' }}">
+      <input type="hidden" name="lng" id="f-lng" value="{{ form.lng if form else '' }}">
+    </div>
+
+    <div class="post-form">
+      <label>Your name
+        <input required name="renter_name" value="{{ form.renter_name if form else '' }}">
+      </label>
+      <div class="two-col">
+        <label>Email
+          <input required type="email" name="email" value="{{ form.email if form else '' }}">
+        </label>
+        <label>Phone (optional)
+          <input name="phone" value="{{ form.phone if form else '' }}">
+        </label>
+      </div>
+      <label>Area / suburb (what landlords will see)
+        <input name="area_label" id="f-area" value="{{ form.area_label if form else '' }}" placeholder="e.g. Avondale, Harare">
+      </label>
+      <div class="two-col">
+        <label>Room type
+          <select required name="type">
+            <option value="">Choose one</option>
+            {% for t in room_types %}
+              <option value="{{ t }}" {{ 'selected' if form and form.type == t else '' }}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Your budget ($/month)
+          <input required type="number" min="1" name="budget" value="{{ form.budget if form else '' }}">
+        </label>
+      </div>
+      <label>Move-in date
+        <input required name="move_in" value="{{ form.move_in if form else '' }}" placeholder="e.g. Oct 15, or Immediately">
+      </label>
+      <label>Anything landlords should know (optional)
+        <textarea rows="3" name="note">{{ form.note if form else '' }}</textarea>
+      </label>
+      <button type="submit" class="submit">Send request</button>
+    </div>
+  </form>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const startLat = {{ form.lat if form and form.lat else -19.4500 }};
+    const startLng = {{ form.lng if form and form.lng else 29.8167 }};
+    const startZoom = {{ 14 if form and form.lat else 13 }};
+
+    const postMap = L.map('post-map').setView([startLat, startLng], startZoom);
+    const postTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(postMap);
+
+    // Offline-friendly fallback: if enough tiles fail to load in a short
+    // window, assume there's no connection and surface the manual entry path.
+    let tileErrorCount = 0;
+    postTiles.on('tileerror', () => {
+      tileErrorCount++;
+      if (tileErrorCount >= 6) {
+        document.getElementById('post-map').style.display = 'none';
+        document.getElementById('post-map-fallback').style.display = 'block';
+        document.getElementById('manual-coords').style.display = 'grid';
+      }
+    });
+
+    let pin = null;
+    function setPin(lat, lng, zoom) {
+      if (pin) postMap.removeLayer(pin);
+      pin = L.marker([lat, lng], { draggable: true }).addTo(postMap);
+      pin.on('dragend', () => {
+        const p = pin.getLatLng();
+        document.getElementById('f-lat').value = p.lat;
+        document.getElementById('f-lng').value = p.lng;
+        document.getElementById('m-lat').value = p.lat;
+        document.getElementById('m-lng').value = p.lng;
+      });
+      document.getElementById('f-lat').value = lat;
+      document.getElementById('f-lng').value = lng;
+      document.getElementById('m-lat').value = lat;
+      document.getElementById('m-lng').value = lng;
+      if (zoom) postMap.setView([lat, lng], zoom);
+    }
+
+    {% if form and form.lat %}
+      setPin({{ form.lat }}, {{ form.lng }});
+    {% endif %}
+
+    postMap.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+
+    document.getElementById('locate-btn').addEventListener('click', () => {
+      if (!navigator.geolocation) { alert('Location is not available in this browser.'); return; }
+      navigator.geolocation.getCurrentPosition(
+        pos => setPin(pos.coords.latitude, pos.coords.longitude, 14),
+        () => alert('Could not get your location.')
+      );
+    });
+
+    document.getElementById('manual-coords-toggle').addEventListener('click', () => {
+      const box = document.getElementById('manual-coords');
+      box.style.display = box.style.display === 'none' ? 'grid' : 'none';
+    });
+    ['m-lat', 'm-lng'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        const lat = parseFloat(document.getElementById('m-lat').value);
+        const lng = parseFloat(document.getElementById('m-lng').value);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          document.getElementById('f-lat').value = lat;
+          document.getElementById('f-lng').value = lng;
+          if (postMap._loaded) { try { setPin(lat, lng, 14); } catch (e) {} }
+        }
+      });
+    });
+
+    function doAddressSearch() {
+      const q = document.getElementById('addr-search').value.trim();
+      if (!q) return;
+      fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=zw&q=' + encodeURIComponent(q + ', Gweru, Zimbabwe'))
+        .then(res => res.json())
+        .then(results => {
+          if (results.length === 0) { alert('No match found for that area.'); return; }
+          const r = results[0];
+          setPin(parseFloat(r.lat), parseFloat(r.lon), 14);
+          if (!document.getElementById('f-area').value) {
+            document.getElementById('f-area').value = q;
+          }
+        })
+        .catch(() => alert("Couldn't reach the address search service — check your connection, or enter coordinates manually below."));
+    }
+    document.getElementById('addr-search-btn').addEventListener('click', doAddressSearch);
+    document.getElementById('addr-search').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doAddressSearch(); }
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TanstarSafeHousing{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div id="offline-banner" class="offline-banner" style="display:none;">
+    You're offline — maps, address search, directions, and live offer updates won't work until
+    you reconnect. You can still fill in forms; use the "enter coordinates manually" option
+    where a map is required.
+  </div>
+  <header class="site">
+    <div class="top">
+      <span class="brand">Tanstar<span class="safe">Safe</span>Housing<span class="tag">Gweru</span></span>
+      <span class="account">
+        {% if current_landlord %}
+          Landlord: {{ current_landlord.name }}
+          <form method="post" action="{{ url_for('landlord_logout') }}" style="display:inline;">
+            <button type="submit" class="link-btn">Log out</button>
+          </form>
+        {% else %}
+          <a href="{{ url_for('landlord_login') }}">Landlord login</a>
+        {% endif %}
+      </span>
+    </div>
+    <nav>
+      <a href="{{ url_for('request_a_room') }}" class="cta {{ 'active' if request.endpoint == 'request_a_room' else '' }}">Request a room</a>
+      <a href="{{ url_for('browse') }}" class="{{ 'active' if request.endpoint in ('browse','room_detail') else '' }}">Browse rooms</a>
+      <a href="{{ url_for('my_applications') }}" class="{{ 'active' if request.endpoint in ('my_applications','directions') else '' }}">My activity</a>
+      <span style="width:1px;background:var(--line);align-self:stretch;margin:6px 2px;"></span>
+      <a href="{{ url_for('nearby_requests') }}" class="{{ 'active' if request.endpoint in ('nearby_requests','make_offer') else '' }}">Nearby requests</a>
+      <a href="{{ url_for('list_a_room') }}" class="{{ 'active' if request.endpoint == 'list_a_room' else '' }}">+ List your room</a>
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint in ('dashboard','update_status','toggle_verified') else '' }}">Landlord dashboard</a>
+    </nav>
+  </header>
+  <main class="{% block mainclass %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Global offline/online banner — pages that need a map or socket connection
+    // degrade gracefully (manual coordinate entry, static fallbacks) rather than
+    // failing silently when this fires.
+    function updateOnlineStatus() {
+      document.getElementById('offline-banner').style.display = navigator.onLine ? 'none' : 'block';
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
