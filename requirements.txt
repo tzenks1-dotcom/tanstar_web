@@ -2,5 +2,5 @@ Flask
 Flask-SocketIO
 Flask-SQLAlchemy
 python-dotenv
-gunicorn==20.1.0
-eventlet==0.33.3
+gunicorn==23.0.0
+eventlet==80.9.0
