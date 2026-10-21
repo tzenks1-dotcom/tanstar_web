@@ -57,6 +57,13 @@ ALLOWED_EXT = {"png", "jpg", "jpeg", "webp"}
 
 ROOM_TYPES = ["Private room", "Shared room", "Studio", "Boarding house", "Whole house"]
 STATUSES = ["Submitted", "Under review", "Approved", "Declined"]
+ROOM_STATUSES = ["Available", "Occupied"]
+# Types where one approved tenant fills the whole listing. Shared rooms and
+# boarding houses have several beds, so landlords flip those by hand.
+SINGLE_TENANT_TYPES = ("Private room", "Studio", "Whole house")
+# Sample listings shown as already occupied so the map shows both states.
+OCCUPIED_SEEDS = ("rm_gweru_ridgemont", "rm_gweru_mkoba14", "rm_gweru_nehosho",
+                  "rm_bh_mkoba8", "rm_gweru_clonsilla")
 SAFETY_OPTIONS = [
     "ID-verified landlord", "Perimeter wall & gate", "Prepaid electricity meter",
     "Borehole / water backup", "Neighbourhood watch", "Deadbolt + burglar bars",
@@ -344,6 +351,8 @@ def init_db():
         )
     """)
     ensure_column(db, "rooms", "landlord_id", "TEXT")
+    fresh_status = "status" not in [r[1] for r in db.execute("PRAGMA table_info(rooms)").fetchall()]
+    ensure_column(db, "rooms", "status", "TEXT NOT NULL DEFAULT 'Available'")
     db.execute("""
         CREATE TABLE IF NOT EXISTS applications (
             id TEXT PRIMARY KEY,
@@ -460,6 +469,9 @@ def init_db():
             "description, lat, lng, photo_url, posted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             pl + (str(date.today()),),
         )
+    if fresh_status:  # first run with availability tracking: show a few sample rooms as occupied
+        db.execute("UPDATE rooms SET status = 'Occupied' WHERE id IN (%s)" % ",".join("?" * len(OCCUPIED_SEEDS)),
+                   OCCUPIED_SEEDS)
     db.commit()
     db.close()
 
@@ -471,6 +483,12 @@ def haversine_km(lat1, lng1, lat2, lng2):
     dlng = lng2 - lng1
     a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
     return 2 * 6371 * asin(sqrt(a))
+
+
+def mark_occupied_if_single_tenant(db, room_id):
+    """Once a tenant is approved for a private room, studio or whole house, it is taken."""
+    db.execute("UPDATE rooms SET status = 'Occupied' WHERE id = ? AND type IN (%s)"
+               % ",".join("?" * len(SINGLE_TENANT_TYPES)), (room_id,) + SINGLE_TENANT_TYPES)
 
 
 def room_to_dict(row):
@@ -625,7 +643,11 @@ def api_rooms():
     q = request.args.get("q", "").strip()
     rtype = request.args.get("type", "").strip()
     max_price = request.args.get("max_price", "").strip()
+    status = request.args.get("status", "").strip()
 
+    if status in ROOM_STATUSES:
+        query += " AND status = ?"
+        params.append(status)
     if q:
         query += " AND (title LIKE ? OR city LIKE ? OR address LIKE ?)"
         params += [f"%{q}%", f"%{q}%", f"%{q}%"]
@@ -664,6 +686,9 @@ def apply_to_room(room_id):
     room = db.execute("SELECT * FROM rooms WHERE id = ?", (room_id,)).fetchone()
     if room is None:
         return render_template("not_found.html", kind="room"), 404
+    if room["status"] == "Occupied":
+        return render_template("room.html", room=room_to_dict(room), profile={},
+                               errors=["This room is currently occupied, so it isn't taking applications."])
 
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip()
@@ -873,6 +898,7 @@ def accept_offer(offer_id):
         (app_id, offer["room_id"], rq["renter_name"], rq["email"], rq["phone"], rq["move_in"],
          offer["message"], "Approved", str(date.today())),
     )
+    mark_occupied_if_single_tenant(db, offer["room_id"])
     db.commit()
 
     # Tell every landlord's "Nearby requests" map this request is gone, and tell
@@ -925,7 +951,7 @@ def make_offer(request_id):
 
     landlord = current_landlord()
     room_rows = db.execute(
-        "SELECT * FROM rooms WHERE landlord_id = ? ORDER BY title", (landlord["id"],)
+        "SELECT * FROM rooms WHERE landlord_id = ? AND status = 'Available' ORDER BY title", (landlord["id"],)
     ).fetchall()
     rooms_with_distance = []
     for r in room_rows:
@@ -1062,7 +1088,7 @@ def dashboard():
     applications = [dict(r) for r in rows]
 
     room_rows = db.execute(
-        "SELECT id, title, city, verified FROM rooms WHERE landlord_id = ? ORDER BY title",
+        "SELECT id, title, city, verified, status FROM rooms WHERE landlord_id = ? ORDER BY title",
         (landlord["id"],),
     ).fetchall()
     room_info = {r["id"]: dict(r) for r in room_rows}
@@ -1077,6 +1103,7 @@ def dashboard():
                 "room_title": a["room_title"],
                 "room_city": a["room_city"],
                 "verified": room_info.get(key, {}).get("verified", 0),
+                "status": room_info.get(key, {}).get("status", "Available"),
                 "apps": [],
             }
             grouped.append(seen[key])
@@ -1089,7 +1116,7 @@ def dashboard():
         if room_id not in listed_room_ids:
             grouped.append({
                 "room_id": room_id, "room_title": info["title"], "room_city": info["city"],
-                "verified": info["verified"], "apps": [],
+                "verified": info["verified"], "status": info["status"], "apps": [],
             })
 
     return render_template("dashboard.html", grouped=grouped, statuses=STATUSES,
@@ -1109,6 +1136,9 @@ def update_status(app_id):
     ).fetchone()
     if owns and new_status in STATUSES:
         db.execute("UPDATE applications SET status = ? WHERE id = ?", (new_status, app_id))
+        if new_status == "Approved":
+            room_id = db.execute("SELECT room_id FROM applications WHERE id = ?", (app_id,)).fetchone()[0]
+            mark_occupied_if_single_tenant(db, room_id)
         db.commit()
     return redirect(url_for("dashboard"))
 
@@ -1126,6 +1156,19 @@ def toggle_verified(room_id):
         db.execute("UPDATE rooms SET verified = ? WHERE id = ?", (0 if row["verified"] else 1, room_id))
         db.commit()
     return redirect(url_for("dashboard"))
+
+
+@app.route("/room/<room_id>/toggle-status", methods=["POST"])
+@login_required
+def toggle_status(room_id):
+    db = get_db()
+    row = db.execute("SELECT status, landlord_id FROM rooms WHERE id = ?", (room_id,)).fetchone()
+    if row is not None and (session.get("is_admin") or row["landlord_id"] == session["landlord_id"]):
+        new = "Available" if row["status"] == "Occupied" else "Occupied"
+        db.execute("UPDATE rooms SET status = ? WHERE id = ?", (new, room_id))
+        db.commit()
+    nxt = request.form.get("next", "")
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("dashboard"))
 
 
 # --------------------------------------------------------------------------
