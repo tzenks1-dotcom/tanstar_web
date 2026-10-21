@@ -1,4 +1,4 @@
-""" 
+"""
 TanstarSafeHousing — a Gweru, Zimbabwe room rental web app.
 
 Run with:
@@ -47,8 +47,15 @@ socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 DEMO_LANDLORD_EMAIL = "demo@tanstarsafehousing.co.zw"
 DEMO_LANDLORD_PASSWORD = "demo1234"
+ADMIN_EMAIL = "admin@tanstarsafehousing.co.zw"
+ADMIN_PASSWORD = "admin1234"  # change this before going anywhere near production
 
-ROOM_TYPES = ["Private room", "Shared room", "Studio", "Whole house"]
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024  # 6 MB per upload
+ALLOWED_EXT = {"png", "jpg", "jpeg", "webp"}
+
+ROOM_TYPES = ["Private room", "Shared room", "Studio", "Boarding house", "Whole house"]
 STATUSES = ["Submitted", "Under review", "Approved", "Declined"]
 SAFETY_OPTIONS = [
     "ID-verified landlord", "Perimeter wall & gate", "Prepaid electricity meter",
@@ -167,6 +174,73 @@ SEED_ROOMS = [
      "Shared house popular with civil servants, two housemates, prepaid electricity meter.",
      ["Prepaid electricity meter", "Background-checked residents"], 0,
      -19.4370, 29.7900, "", "Shamrock Household"),
+    # Extra density around Senga / MSU Main Campus (where most students start
+    # looking), plus Mkoba, Woodlands and a few more suburbs. Sample data.
+    ("rm_gweru_senga2", "Shared room, two minutes from MSU gate", "Gweru",
+     "3 Mkoba Drive, Senga", "Shared room", 75, 100, "Oct 1",
+     "Student house right by the Midlands State University Main Campus gate, five "
+     "students currently, rotating cleaning roster, popular with first-years.",
+     ["Background-checked residents", "Deadbolt + burglar bars"], 1,
+     -19.4410, 29.8295, "", "Senga Student House"),
+    ("rm_gweru_senga3", "Private room near MSU Main Campus", "Gweru", "17 Robertson Rd, Senga",
+     "Private room", 125, 115, "Oct 8",
+     "Quiet private room a short walk from the MSU Main Campus library, landlord rents "
+     "mainly to students.",
+     ["ID-verified landlord", "Perimeter wall & gate", "Prepaid electricity meter"], 1,
+     -19.4385, 29.8310, "", "Mr. Mutasa"),
+    ("rm_gweru_senga4", "Bedsitter in Senga, walk to campus", "Gweru", "25 Senga Rd",
+     "Studio", 165, 140, "Sep 27",
+     "Self-contained bedsitter popular with postgraduate students, ten-minute walk to "
+     "the MSU Main Campus entrance, prepaid electricity meter.",
+     ["Prepaid electricity meter", "Deadbolt + burglar bars"], 0,
+     -19.4420, 29.8240, "", "Senga Lodgings"),
+    ("rm_gweru_mkoba6", "Room in Mkoba 6", "Gweru", "Stand 88, Mkoba 6",
+     "Private room", 90, 110, "Oct 4",
+     "Room in a family stand close to Mkoba 6 shopping centre, regular kombis to town "
+     "and to MSU.",
+     ["ID-verified landlord", "Perimeter wall & gate"], 0,
+     -19.4580, 29.7980, "", "Mai Ndlovu"),
+    ("rm_gweru_woodlands2", "Shared room in Woodlands", "Gweru", "10 Woodlands Rd",
+     "Shared room", 85, 100, "Oct 2",
+     "Shared house in Woodlands with two working tenants, quiet street, borehole backup "
+     "for city water cuts.",
+     ["Borehole / water backup", "Background-checked residents"], 1,
+     -19.4225, 29.8095, "", "Woodlands Household"),
+    ("rm_gweru_mtapa", "Room in Mtapa", "Gweru", "6 Mtapa Shopping Centre Rd",
+     "Private room", 80, 105, "Sep 26",
+     "Affordable room close to Mtapa shops and the main Gweru-Bulawayo road, shared "
+     "kitchen with the landlord's family.",
+     ["ID-verified landlord", "Borehole / water backup"], 0,
+     -19.4780, 29.7760, "", "Mtapa Family Home"),
+    ("rm_gweru_nehosho", "Shared room in Nehosho", "Gweru", "4 Nehosho Rd",
+     "Shared room", 78, 100, "Oct 7",
+     "Simple shared room in Nehosho, close to the industrial sites, borehole on the "
+     "property, two other tenants.",
+     ["Borehole / water backup", "Background-checked residents"], 0,
+     -19.4530, 29.7820, "", "Nehosho Household"),
+    # Boarding houses (a bed in a shared room, usually with house rules and a warden)
+    ("rm_bh_senga1", "Kudzai Boarding House, Senga", "Gweru", "8 Senga Rd, Senga",
+     "Boarding house", 55, 90, "Immediately",
+     "Student boarding house a few minutes' walk from the MSU Main Campus. Beds in four-person "
+     "rooms, shared bathrooms, house rules and a resident warden.",
+     ["ID-verified landlord", "Perimeter wall & gate", "Background-checked residents"], 1,
+     -19.4402, 29.8268, "", "Mrs. Kudzai Moyo"),
+    ("rm_bh_senga2", "Gate Road Boarding House, Senga", "Gweru", "21 Gate Rd, Senga",
+     "Boarding house", 65, 95, "Oct 1",
+     "Two-person rooms, prepaid electricity, borehole water, study room open until 10pm.",
+     ["Prepaid electricity meter", "Borehole / water backup", "Deadbolt + burglar bars"], 1,
+     -19.4372, 29.8338, "", "Mr. Tafara Chikomo"),
+    ("rm_bh_mkoba8", "Mkoba 8 Boarding House", "Gweru", "Stand 412, Mkoba 8",
+     "Boarding house", 50, 90, "Oct 3",
+     "Affordable beds in shared rooms, kombi route to town and MSU, communal kitchen.",
+     ["ID-verified landlord", "Perimeter wall & gate"], 0,
+     -19.4650, 29.7890, "", "Mai Sibanda"),
+    ("rm_bh_woodlands1", "Woodlands Student Lodge", "Gweru", "12 Woodlands Close",
+     "Boarding house", 70, 100, "Oct 6",
+     "Quiet boarding house for students and young workers, two-person rooms, secure yard and "
+     "evening gate guard.",
+     ["24-hour security guard", "Perimeter wall & gate", "Background-checked residents"], 1,
+     -19.4215, 29.8105, "", "Woodlands Lodge Trust"),
 ]
 
 # id, renter_name, email, phone, lat, lng, area_label, type, budget, move_in, note
@@ -180,6 +254,32 @@ SEED_REQUESTS = [
     ("rq_demo3", "Brian K.", "brian.demo@example.com", "", -19.4625, 29.7930,
      "Mkoba, near MSU", "Shared room", 70, "Immediately",
      "Student at Midlands State University, flexible on exact village."),
+    ("rq_demo4", "Rutendo S.", "rutendo.demo@example.com", "", -19.4400, 29.8280,
+     "Senga, as close to MSU Main Campus as possible", "Boarding house", 60, "Oct 1",
+     "First-year MSU student, would love walking distance to the Main Campus gate."),
+]
+
+# Restaurants / eateries — id, name, owner, cuisine, address, price range (US$),
+# description, lat, lng, photo_url. Sample data: admins add the real ones.
+SEED_PLACES = [
+    ("pl_campus_grill", "Campus Corner Grill", "Mr. Tendai Chuma", "Grills & braai",
+     "Senga Rd, near the MSU gate", "3-6", "Grilled chicken, sadza and braai plates, "
+     "popular with students at lunchtime.", -19.4408, 29.8288, ""),
+    ("pl_mama_rudo", "Mama Rudo's Kitchen", "Mai Rudo", "Traditional (sadza & stews)",
+     "Mkoba 1 shopping centre", "2-4", "Home-style sadza with beef stew, covo and "
+     "beans.", -19.4628, 29.7935, ""),
+    ("pl_senga_chicken", "Senga Chicken Hub", "Mr. Blessing Dube", "Fried chicken & chips",
+     "Senga shops", "3-5", "Fried chicken, chips and cold drinks, open late.",
+     -19.4392, 29.8255, ""),
+    ("pl_woodlands_cafe", "Woodlands Cafe", "Mrs. Patience Moyo", "Breakfast & coffee",
+     "Woodlands shopping centre", "2-6", "Cooked breakfasts, tea, coffee and light "
+     "lunches.", -19.4222, 29.8090, ""),
+    ("pl_cbd_burgers", "Gweru Pizza & Burgers", "Mr. Farai Nyathi", "Pizza & burgers",
+     "Main St, Gweru CBD", "4-8", "Pizzas, burgers and milkshakes in the town centre.",
+     -19.4505, 29.8160, ""),
+    ("pl_ascot_braai", "Ascot Braai Spot", "Mr. Simba Gumbo", "Braai",
+     "Ascot shopping centre", "3-7", "Evening braai with meat platters and sadza.",
+     -19.4283, 29.8186, ""),
 ]
 
 
@@ -296,7 +396,28 @@ def init_db():
     """)
     ensure_column(db, "offers", "landlord_id", "TEXT")
 
-    if first_run:
+    ensure_column(db, "landlords", "is_admin", "INTEGER NOT NULL DEFAULT 0")
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS places (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            owner_name TEXT,
+            cuisine TEXT,
+            address TEXT NOT NULL,
+            price_range TEXT,
+            description TEXT,
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            photo_url TEXT,
+            posted_at TEXT
+        )
+    """)
+
+    # Seeding is idempotent so both fresh and upgraded databases get the sample data.
+    demo = db.execute("SELECT id FROM landlords WHERE email = ?", (DEMO_LANDLORD_EMAIL,)).fetchone()
+    if demo:
+        demo_landlord_id = demo[0]
+    else:
         demo_landlord_id = "ll_" + str(uuid.uuid4())[:10]
         db.execute(
             "INSERT INTO landlords (id, name, email, password_hash, created_at) "
@@ -304,28 +425,41 @@ def init_db():
             (demo_landlord_id, "Demo Landlord", DEMO_LANDLORD_EMAIL,
              generate_password_hash(DEMO_LANDLORD_PASSWORD), str(date.today())),
         )
-        for r in SEED_ROOMS:
+    if not db.execute("SELECT id FROM landlords WHERE is_admin = 1").fetchone():
+        db.execute(
+            "INSERT OR IGNORE INTO landlords (id, name, email, password_hash, created_at, is_admin) "
+            "VALUES (?, ?, ?, ?, ?, 1)",
+            ("ll_admin_" + str(uuid.uuid4())[:6], "Tanstar Admin", ADMIN_EMAIL,
+             generate_password_hash(ADMIN_PASSWORD), str(date.today())),
+        )
+    for r in SEED_ROOMS:
+        (rid, title, city, address, rtype, price, size_sqft, available, description,
+         safety, verified, lat, lng, photo_url, landlord_name) = r
+        db.execute(
+            "INSERT OR IGNORE INTO rooms (id, title, city, address, type, price, size_sqft, "
+            "available, description, safety, verified, lat, lng, photo_url, "
+            "landlord_name, landlord_id, posted_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (rid, title, city, address, rtype, price, size_sqft, available, description,
-             safety, verified, lat, lng, photo_url, landlord_name) = r
-            db.execute(
-                "INSERT INTO rooms (id, title, city, address, type, price, size_sqft, "
-                "available, description, safety, verified, lat, lng, photo_url, "
-                "landlord_name, landlord_id, posted_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (rid, title, city, address, rtype, price, size_sqft, available, description,
-                 json.dumps(safety), verified, lat, lng, photo_url, landlord_name,
-                 demo_landlord_id, str(date.today())),
-            )
-        for rq in SEED_REQUESTS:
+             json.dumps(safety), verified, lat, lng, photo_url, landlord_name,
+             demo_landlord_id, str(date.today())),
+        )
+    for rq in SEED_REQUESTS:
+        (rqid, renter_name, email, phone, lat, lng, area_label, rtype, budget,
+         move_in, note) = rq
+        db.execute(
+            "INSERT OR IGNORE INTO requests (id, renter_name, email, phone, lat, lng, "
+            "area_label, type, budget, move_in, note, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (rqid, renter_name, email, phone, lat, lng, area_label, rtype, budget,
-             move_in, note) = rq
-            db.execute(
-                "INSERT INTO requests (id, renter_name, email, phone, lat, lng, "
-                "area_label, type, budget, move_in, note, status, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (rqid, renter_name, email, phone, lat, lng, area_label, rtype, budget,
-                 move_in, note, "Open", str(date.today())),
-            )
+             move_in, note, "Open", str(date.today())),
+        )
+    for pl in SEED_PLACES:
+        db.execute(
+            "INSERT OR IGNORE INTO places (id, name, owner_name, cuisine, address, price_range, "
+            "description, lat, lng, photo_url, posted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            pl + (str(date.today()),),
+        )
     db.commit()
     db.close()
 
@@ -369,6 +503,34 @@ def inject_landlord():
     return {"current_landlord": current_landlord()}
 
 
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("landlord_login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def save_upload(file_storage):
+    """Save an uploaded JPG/PNG/WebP under static/uploads and return its URL,
+    or None if the file is missing or isn't really one of those image types."""
+    if not file_storage or not file_storage.filename or "." not in file_storage.filename:
+        return None
+    ext = file_storage.filename.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_EXT:
+        return None
+    head = file_storage.stream.read(12)
+    file_storage.stream.seek(0)
+    looks_ok = (head.startswith(b"\xff\xd8\xff") or head.startswith(b"\x89PNG")
+                or (head[:4] == b"RIFF" and head[8:12] == b"WEBP"))
+    if not looks_ok:
+        return None
+    name = uuid.uuid4().hex[:16] + "." + ("jpg" if ext == "jpeg" else ext)
+    file_storage.save(os.path.join(UPLOAD_DIR, name))
+    return "/static/uploads/" + name
+
+
 @app.route("/landlord/register", methods=["GET", "POST"])
 def landlord_register():
     if request.method == "GET":
@@ -408,6 +570,7 @@ def landlord_register():
     db.commit()
     session["landlord_id"] = landlord_id
     session["landlord_name"] = name
+    session["is_admin"] = False
     return redirect(request.args.get("next") or url_for("dashboard"))
 
 
@@ -432,6 +595,7 @@ def landlord_login():
 
     session["landlord_id"] = row["id"]
     session["landlord_name"] = row["name"]
+    session["is_admin"] = bool(row["is_admin"])
     return redirect(request.args.get("next") or url_for("dashboard"))
 
 
@@ -439,6 +603,7 @@ def landlord_login():
 def landlord_logout():
     session.pop("landlord_id", None)
     session.pop("landlord_name", None)
+    session.pop("is_admin", None)
     return redirect(url_for("browse"))
 
 
@@ -961,6 +1126,85 @@ def toggle_verified(room_id):
         db.execute("UPDATE rooms SET verified = ? WHERE id = ?", (0 if row["verified"] else 1, room_id))
         db.commit()
     return redirect(url_for("dashboard"))
+
+
+# --------------------------------------------------------------------------
+# Restaurants + admin (photo uploads)
+# --------------------------------------------------------------------------
+
+@app.route("/api/places")
+def api_places():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    query, params = "SELECT * FROM places", []
+    if q:
+        query += " WHERE name LIKE ? OR cuisine LIKE ? OR address LIKE ? OR description LIKE ?"
+        params = [f"%{q}%"] * 4
+    return jsonify([dict(r) for r in db.execute(query + " ORDER BY name", params).fetchall()])
+
+
+@app.errorhandler(413)
+def too_large(e):
+    if session.get("is_admin"):
+        return redirect(url_for("admin", msg="That image is too large (6 MB max)."))
+    return "That file is too large.", 413
+
+
+@app.route("/admin")
+@admin_required
+def admin():
+    db = get_db()
+    rooms = [room_to_dict(r) for r in db.execute(
+        "SELECT * FROM rooms ORDER BY type, title").fetchall()]
+    places = [dict(r) for r in db.execute("SELECT * FROM places ORDER BY name").fetchall()]
+    return render_template("admin.html", rooms=rooms, places=places,
+                           msg=request.args.get("msg"))
+
+
+def _admin_photo(table, item_id):
+    url = save_upload(request.files.get("photo"))
+    if not url:
+        return redirect(url_for("admin", msg="That file wasn't a valid JPG, PNG, or WebP image."))
+    db = get_db()
+    db.execute(f"UPDATE {table} SET photo_url = ? WHERE id = ?", (url, item_id))
+    db.commit()
+    return redirect(url_for("admin", msg="Photo saved."))
+
+
+@app.route("/admin/room/<room_id>/photo", methods=["POST"])
+@admin_required
+def admin_room_photo(room_id):
+    return _admin_photo("rooms", room_id)
+
+
+@app.route("/admin/place/<place_id>/photo", methods=["POST"])
+@admin_required
+def admin_place_photo(place_id):
+    return _admin_photo("places", place_id)
+
+
+@app.route("/admin/place/add", methods=["POST"])
+@admin_required
+def admin_place_add():
+    f = request.form
+    name, address = f.get("name", "").strip(), f.get("address", "").strip()
+    try:
+        lat, lng = float(f.get("lat", "")), float(f.get("lng", ""))
+    except ValueError:
+        lat = lng = None
+    if not name or not address or lat is None:
+        return redirect(url_for("admin", msg="A restaurant needs a name, address, and coordinates."))
+    photo = save_upload(request.files.get("photo"))
+    db = get_db()
+    db.execute(
+        "INSERT INTO places (id, name, owner_name, cuisine, address, price_range, description, "
+        "lat, lng, photo_url, posted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("pl_" + uuid.uuid4().hex[:10], name, f.get("owner_name", "").strip(),
+         f.get("cuisine", "").strip(), address, f.get("price_range", "").strip(),
+         f.get("description", "").strip(), lat, lng, photo, str(date.today())),
+    )
+    db.commit()
+    return redirect(url_for("admin", msg="Restaurant added."))
 
 
 if __name__ == "__main__":
